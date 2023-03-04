@@ -271,10 +271,8 @@ class Trie {
 
     std::size_t i{0};
 
-    if (!root_->HasChild(key[i])) {
-      root_->InsertChildNode(key[i], std::make_unique<TrieNode>(key[i]));
-    }
-    auto node = root_->GetChildNode(key[i])->get();
+    latch_.WLock();
+    auto node = root_.get();
 
     for (; i < key.size() - 1; i++) {
       if (!node->HasChild(key[i])) {
@@ -286,14 +284,19 @@ class Trie {
     //! reach the ending character of a key
     if (!node->HasChild(key[i])) {
       node->InsertChildNode(key[i], std::make_unique<TrieNodeWithValue<T>>(key[i], value));
+      latch_.WUnlock();
       return true;
     }
 
-    auto child_node = node->GetChildNode(key[i])->get();
-    if (!child_node->IsEndNode()) {
+    if (!node->GetChildNode(key[i])->get()->IsEndNode()) {
+      auto child_node = node->GetChildNode(key[i])->release();
+      node->RemoveChildNode(key[i]);
       node->InsertChildNode(key[i], std::make_unique<TrieNodeWithValue<T>>(std::move(*child_node), value));
+      latch_.WUnlock();
       return true;
     }
+
+    latch_.WUnlock();
     return false;
   }
 
@@ -320,16 +323,14 @@ class Trie {
 
     std::size_t i{0};
     std::vector<TrieNode *> node_array{};
-    if (!root_->HasChild(key[i])) {
-      return false;
-    }
-    node_array.push_back(root_.get());
 
-    auto node = root_->GetChildNode(key[i])->get();
+    latch_.WLock();
+    auto node = root_.get();
     node_array.push_back(node);
 
     for (; i < key.size() - 1; i++) {
       if (!node->HasChild(key[i])) {
+        latch_.WUnlock();
         return false;
       }
       node = node->GetChildNode(key[i])->get();
@@ -338,12 +339,14 @@ class Trie {
 
     //! reach the ending character of a key
     if (!node->HasChild(key[i]) || !node->GetChildNode(key[i])->get()->IsEndNode()) {
+      latch_.WUnlock();
       return false;
     }
 
     auto child_node = node->GetChildNode(key[i])->get();
     if (child_node->HasChildren()) {
       child_node->SetEndNode(false);
+      latch_.WUnlock();
       return true;
     }
 
@@ -357,8 +360,10 @@ class Trie {
         node_array[j - 1]->RemoveChildNode(remove_key);
         continue;
       }
+      latch_.WUnlock();
       return true;
     }
+    latch_.WUnlock();
     return true;
   }
 
@@ -387,15 +392,14 @@ class Trie {
     }
 
     std::size_t i{0};
-    if (!root_->HasChild(key[i])) {
-      *success = false;
-      return {};
-    }
 
-    auto node = root_->GetChildNode(key[i])->get();
+    latch_.RLock();
+    auto node = root_.get();
+
     for (; i < key.size() - 1; i++) {
       if (!node->HasChild(key[i])) {
         *success = false;
+        latch_.RUnlock();
         return {};
       }
       node = node->GetChildNode(key[i])->get();
@@ -404,15 +408,18 @@ class Trie {
     //! reach the ending character of a key
     if (!node->HasChild(key[i]) || !node->GetChildNode(key[i])->get()->IsEndNode()) {
       *success = false;
+      latch_.RUnlock();
       return {};
     }
 
     if (auto node_with_value = dynamic_cast<TrieNodeWithValue<T> *>(node->GetChildNode(key[i])->get())) {
       *success = true;
+      latch_.RUnlock();
       return node_with_value->GetValue();
     }
 
     *success = false;
+    latch_.RUnlock();
     return {};
   }
 };
