@@ -19,7 +19,7 @@
 
 #include <list>
 #include <memory>
-#include <mutex>  // NOLINT
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -168,10 +168,10 @@ class ExtendibleHashTable : public HashTable<K, V> {
   // TODO(student): You may add additional private members and helper functions and remove the ones
   // you don't need.
 
-  int global_depth_;    // The global depth of the directory
-  size_t bucket_size_;  // The size of a bucket
-  int num_buckets_;     // The number of buckets in the hash table
-  mutable std::mutex latch_;
+  int global_depth_;                          // The global depth of the directory
+  size_t bucket_size_;                        // The size of a bucket
+  int num_buckets_;                           // The number of buckets in the hash table
+  mutable std::shared_mutex latch_;           // change to share mutex
   std::vector<std::shared_ptr<Bucket>> dir_;  // The directory of the hash table
 
   // The following functions are completely optional, you can delete them if you have your own ideas.
@@ -193,6 +193,7 @@ class ExtendibleHashTable : public HashTable<K, V> {
    */
   auto IndexOf(const K &key) -> size_t;
 
+  void InsertInternal(const K &key, const V &value);
   auto GetGlobalDepthInternal() const -> int;
   auto GetLocalDepthInternal(int dir_index) const -> int;
   auto GetNumBucketsInternal() const -> int;
