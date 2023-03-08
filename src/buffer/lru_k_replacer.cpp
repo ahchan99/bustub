@@ -44,11 +44,11 @@ auto LRUKReplacer::Evict(frame_id_t *frame_id) -> bool {
 
 void LRUKReplacer::RecordAccess(frame_id_t frame_id) {
   std::scoped_lock<std::mutex> lock(latch_);
-  if (curr_size_ == replacer_size_) {
-    BUSTUB_ASSERT(frame_id, "frame id is invalid");
-  }
   // first record
   if (count_map_.count(frame_id) == 0) {
+    if (curr_size_ == replacer_size_) {
+      BUSTUB_ASSERT(frame_id, "frame id is invalid");
+    }
     inf_history_list_.push_back(frame_id);
     count_map_[frame_id] = 1;
     curr_size_++;
