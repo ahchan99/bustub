@@ -142,7 +142,10 @@ class LRUKReplacer {
   size_t k_;
   std::mutex latch_;
 
+  // history_list_ (LRU), inf_history_list_ (FIFO)
   std::list<frame_id_t> history_list_{}, inf_history_list_{};
+  // to accelerate list search
+  std::unordered_map<frame_id_t, std::list<frame_id_t>::iterator> history_iter_map_{}, inf_history_iter_map_{};
   std::unordered_map<frame_id_t, size_t> count_map_{};
   std::unordered_set<frame_id_t> non_evictable_set_{};
 };
