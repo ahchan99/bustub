@@ -49,10 +49,34 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::SetNextPageId(page_id_t next_page_id) { next_pa
  * Helper method to find and return the key associated with input "index"(a.k.a
  * array offset)
  */
-INDEX_TEMPLATE_ARGUMENTS auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
   // replace with your own code
   KeyType key = array_[index].first;
   return key;
+}
+
+/*
+ * Helper method to binary search and return the value associated with input "key"
+ * range: [0, n-1]
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::LookUp(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
+  assert(GetSize() > 1);
+  auto i = 0;
+  auto j = GetSize() - 1;
+  while (i <= j) {
+    auto m = (j - i) / 2 + i;
+    if (comparator(array_[m].first, key) < 0) {
+      i = m + 1;
+    } else if (comparator(array_[m].first, key) > 0) {
+      j = m - 1;
+    } else {
+      return array_[m].second;
+    }
+  }
+  // page_id 为 INVALID_PAGE_ID 表示查询失败
+  return RID();
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;

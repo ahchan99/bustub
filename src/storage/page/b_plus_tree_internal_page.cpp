@@ -55,6 +55,27 @@ INDEX_TEMPLATE_ARGUMENTS auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index)
   return value;
 }
 
+/*
+ * Helper method to binary search and return the value associated with input "key"
+ * range: [1, n-1]
+ */
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::LookUp(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
+  assert(GetSize() > 1);
+  auto i = 1;
+  auto j = GetSize() - 1;
+  while (i <= j) {
+    auto m = (j - i) / 2 + i;
+    // 小于 key 走左侧，大于等于 key 走右侧
+    if (comparator(array_[m].first, key) <= 0) {  // mid 为查找的值并入右侧
+      i = m + 1;
+    } else {
+      j = m - 1;
+    }
+  }
+  return array_[i].second;
+}
+
 // valuetype for internalNode should be page id_t
 template class BPlusTreeInternalPage<GenericKey<4>, page_id_t, GenericComparator<4>>;
 template class BPlusTreeInternalPage<GenericKey<8>, page_id_t, GenericComparator<8>>;

@@ -15,7 +15,13 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manag
       buffer_pool_manager_(buffer_pool_manager),
       comparator_(comparator),
       leaf_max_size_(leaf_max_size),
-      internal_max_size_(internal_max_size) {}
+      internal_max_size_(internal_max_size) {
+  page_id_t page_id;
+  auto page = buffer_pool_manager_->NewPage(&page_id);
+  auto internal_page = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page->GetData());
+  internal_page->Init(page_id, INVALID_PAGE_ID, leaf_max_size);
+  root_page_id_ = page_id;
+}
 
 /*
  * Helper function to decide whether current b+tree is empty
@@ -32,6 +38,24 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool {
+  Page *page = buffer_pool_manager_->FetchPage(root_page_id_);
+  auto internal_page = reinterpret_cast<InternalPage *>(page->GetData());
+  auto page_id = root_page_id_;
+  while (!internal_page->IsLeafPage()) {
+    auto child_page_id = internal_page->LookUp(key, comparator_);
+    page = buffer_pool_manager_->FetchPage(child_page_id);
+    internal_page = reinterpret_cast<InternalPage *>(page->GetData());
+    buffer_pool_manager_->UnpinPage(page_id, false);
+    page_id = child_page_id;
+  }
+  // now internal_page is a leaf node
+  auto left_page = reinterpret_cast<LeafPage *>(internal_page);
+  auto rid = left_page->LookUp(key, comparator_);
+  if (rid.IsValid()) {
+    result->clear();
+    result->push_back(rid);
+    return true;
+  }
   return false;
 }
 
