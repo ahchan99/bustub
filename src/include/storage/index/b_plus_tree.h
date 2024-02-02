@@ -54,6 +54,8 @@ class BPlusTree {
   // return the value associated with a given key
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
 
+  auto GetLeafPage(const KeyType &key) -> LeafPage *;
+
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
 
@@ -73,6 +75,8 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
+
+  auto CreatLeafPage() -> LeafPage*;
 
  private:
   void UpdateRootPageId(int insert_record = 0);

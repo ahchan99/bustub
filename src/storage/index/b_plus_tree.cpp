@@ -15,19 +15,13 @@ BPLUSTREE_TYPE::BPlusTree(std::string name, BufferPoolManager *buffer_pool_manag
       buffer_pool_manager_(buffer_pool_manager),
       comparator_(comparator),
       leaf_max_size_(leaf_max_size),
-      internal_max_size_(internal_max_size) {
-  page_id_t page_id;
-  auto page = buffer_pool_manager_->NewPage(&page_id);
-  auto internal_page = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page->GetData());
-  internal_page->Init(page_id, INVALID_PAGE_ID, leaf_max_size);
-  root_page_id_ = page_id;
-}
+      internal_max_size_(internal_max_size) {}
 
 /*
  * Helper function to decide whether current b+tree is empty
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
+auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_PAGE_ID; }
 /*****************************************************************************
  * SEARCH
  *****************************************************************************/
@@ -38,19 +32,12 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return true; }
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool {
-  Page *page = buffer_pool_manager_->FetchPage(root_page_id_);
-  auto internal_page = reinterpret_cast<InternalPage *>(page->GetData());
-  auto page_id = root_page_id_;
-  while (!internal_page->IsLeafPage()) {
-    auto child_page_id = internal_page->LookUp(key, comparator_);
-    page = buffer_pool_manager_->FetchPage(child_page_id);
-    internal_page = reinterpret_cast<InternalPage *>(page->GetData());
-    buffer_pool_manager_->UnpinPage(page_id, false);
-    page_id = child_page_id;
+  if (IsEmpty()) {
+    return false;
   }
-  // now internal_page is a leaf node
-  auto left_page = reinterpret_cast<LeafPage *>(internal_page);
-  auto rid = left_page->LookUp(key, comparator_);
+  auto left_page = GetLeafPage(key);
+  auto rid = left_page->GetValue(key, comparator_);
+  buffer_pool_manager_->UnpinPage(left_page->GetPageId(), false);
   if (rid.IsValid()) {
     result->clear();
     result->push_back(rid);
@@ -71,7 +58,25 @@ auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transaction *transaction) -> bool {
-  return false;
+  LeafPage *leaf_page;
+  if (IsEmpty()) {
+    leaf_page = CreatLeafPage();
+    root_page_id_ = leaf_page->GetPageId();
+    // Call this method everytime root page id is changed.
+    UpdateRootPageId(1);
+  } else {
+    leaf_page = GetLeafPage(key);
+  }
+  if (leaf_page->GetSize() < leaf_page->GetMaxSize()) {
+    // Insert into leaf page
+    auto ret = leaf_page->Insert(key, value, comparator_);
+    buffer_pool_manager_->UnpinPage(leaf_page->GetPageId(), true);
+    return ret;
+  }
+  // Insert into parent page
+  // Split
+  auto new_page = CreatLeafPage();
+  return true;
 }
 
 /*****************************************************************************
@@ -109,6 +114,7 @@ auto BPLUSTREE_TYPE::Begin(const KeyType &key) -> INDEXITERATOR_TYPE { return IN
 /*
  * Input parameter is void, construct an index iterator representing the end
  * of the key/value pair in the leaf node
+ * of the key/value pair in the leaf node
  * @return : index iterator
  */
 INDEX_TEMPLATE_ARGUMENTS
@@ -118,7 +124,7 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE { return INDEXITERATOR_TYPE(); 
  * @return Page id of the root of this tree
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return 0; }
+auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return root_page_id_; }
 
 /*****************************************************************************
  * UTILITIES AND DEBUG
@@ -127,7 +133,7 @@ auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return 0; }
  * Update/Insert root page id in header page(where page_id = 0, header_page is
  * defined under include/page/header_page.h)
  * Call this method everytime root page id is changed.
- * @parameter: insert_record      defualt value is false. When set to true,
+ * @parameter: insert_record      default value is false. When set to true,
  * insert a record <index_name, root_page_id> into header page instead of
  * updating it.
  */
@@ -154,8 +160,7 @@ void BPLUSTREE_TYPE::InsertFromFile(const std::string &file_name, Transaction *t
   std::ifstream input(file_name);
   while (input) {
     input >> key;
-
-    KeyType index_key;
+    KeyType index_key{};
     index_key.SetFromInteger(key);
     RID rid(key);
     Insert(index_key, rid, transaction);
@@ -171,10 +176,40 @@ void BPLUSTREE_TYPE::RemoveFromFile(const std::string &file_name, Transaction *t
   std::ifstream input(file_name);
   while (input) {
     input >> key;
-    KeyType index_key;
+    KeyType index_key{};
     index_key.SetFromInteger(key);
     Remove(index_key, transaction);
   }
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::CreatLeafPage() -> LeafPage * {
+  page_id_t page_id;
+  auto page = buffer_pool_manager_->NewPage(&page_id);
+  assert(page != nullptr);
+  auto leaf_page = reinterpret_cast<B_PLUS_TREE_LEAF_PAGE_TYPE *>(page->GetData());
+  leaf_page->Init(page_id, INVALID_PAGE_ID);
+  buffer_pool_manager_->UnpinPage(page_id, true);
+  return leaf_page;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto BPLUSTREE_TYPE::GetLeafPage(const KeyType &key) -> BPlusTree::LeafPage * {
+  assert(!IsEmpty());
+  Page *page = buffer_pool_manager_->FetchPage(root_page_id_);
+  auto internal_page = reinterpret_cast<InternalPage *>(page->GetData());
+  auto page_id = root_page_id_;
+  while (!internal_page->IsLeafPage()) {
+    auto child_page_id = internal_page->GetValue(key, comparator_);
+    page = buffer_pool_manager_->FetchPage(child_page_id);
+    internal_page = reinterpret_cast<InternalPage *>(page->GetData());
+    buffer_pool_manager_->UnpinPage(page_id, false);
+    page_id = child_page_id;
+  }
+  // now internal_page is a leaf node
+  auto left_page = reinterpret_cast<LeafPage *>(internal_page);
+  buffer_pool_manager_->UnpinPage(left_page->GetPageId(), false);
+  return left_page;
 }
 
 /**
