@@ -40,8 +40,6 @@ class RID {
 
   inline auto GetSlotNum() const -> uint32_t { return slot_num_; }
 
-  inline auto IsValid() const -> bool { return page_id_ == INVALID_PAGE_ID; }
-
   inline void Set(page_id_t page_id, uint32_t slot_num) {
     page_id_ = page_id;
     slot_num_ = slot_num;

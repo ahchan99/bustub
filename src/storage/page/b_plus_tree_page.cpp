@@ -27,7 +27,7 @@ void BPlusTreePage::SetPageType(IndexPageType page_type) { page_type_ = page_typ
  */
 auto BPlusTreePage::GetSize() const -> int { return size_; }
 void BPlusTreePage::SetSize(int size) { size_ = size; }
-void BPlusTreePage::IncreaseSize(int amount) { size_ = size_ + amount; }
+void BPlusTreePage::IncreaseSize(int amount) { size_ += amount; }
 
 /*
  * Helper methods to get/set max size (capacity) of the page
@@ -46,13 +46,12 @@ auto BPlusTreePage::GetMinSize() const -> int {
     // 如果是叶子节点，则没有无效 Key，反之是非叶子节点，则有无效 Key
     return IsLeafPage() ? 1 : 2;
   }
-  // Internal Page stores an ordered m key entries and m+1 child pointers
-  if (page_type_ == IndexPageType::INTERNAL_PAGE) {
-    return (max_size_ + 1) / 2;
-  }
   // Leaf Page stores an ordered m key entries and m value entries
-  // 叶子节点会多一个指针指向 Next Page
-  return max_size_ / 2;
+  if (IsLeafPage()) {
+    return max_size_ / 2;
+  }
+  // Internal Page stores an ordered m key entries and m+1 child pointers
+  return (max_size_ + 1) / 2;
 }
 
 /*

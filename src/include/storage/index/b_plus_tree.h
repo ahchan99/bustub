@@ -33,8 +33,7 @@ namespace bustub {
  * (3) The structure should shrink and grow dynamically
  * (4) Implement index iterator for range scan
  */
-INDEX_TEMPLATE_ARGUMENTS
-class BPlusTree {
+INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   using InternalPage = BPlusTreeInternalPage<KeyType, page_id_t, KeyComparator>;
   using LeafPage = BPlusTreeLeafPage<KeyType, ValueType, KeyComparator>;
 
@@ -54,7 +53,18 @@ class BPlusTree {
   // return the value associated with a given key
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
 
+  template <typename T>
+  auto NewPage() -> T *;
+
+  template <typename T>
+  auto Split(T *page) -> T *;
+
+  auto InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *new_page, const KeyType &new_key,
+                        Transaction *transaction) -> bool;
+
   auto GetLeafPage(const KeyType &key) -> LeafPage *;
+  auto GetLeftmostLeafPage() -> LeafPage *;
+  auto GetRightmostLeafPage() -> LeafPage *;
 
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
@@ -75,8 +85,6 @@ class BPlusTree {
 
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
-
-  auto CreatLeafPage() -> LeafPage*;
 
  private:
   void UpdateRootPageId(int insert_record = 0);
