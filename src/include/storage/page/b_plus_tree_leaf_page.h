@@ -56,6 +56,7 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   auto Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator) -> bool;
   void MoveHalfTo(BPlusTreeLeafPage *recipient);
   void CopyNFrom(MappingType *items, int size);
+  void Remove(const KeyType &key, KeyComparator comparator);
 
  private:
   page_id_t next_page_id_;

@@ -57,25 +57,6 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::KeyAt(int index) const -> KeyType {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetKeyIndex(const KeyType &key, int *key_index, const KeyComparator &comparator)
-    -> bool {
-  auto i = 0;
-  auto j = GetSize() - 1;
-  while (i <= j) {
-    auto m = (j - i) / 2 + i;
-    if (comparator(array_[m].first, key) < 0) {
-      i = m + 1;
-    } else if (comparator(array_[m].first, key) > 0) {
-      j = m - 1;
-    } else {
-      key_index[0] = m;
-      return true;
-    }
-  }
-  return false;
-}
-
-INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::MappingAt(int index) -> const MappingType & { return array_[index]; }
 
 /*
@@ -85,41 +66,26 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::MappingAt(int index) -> const MappingType & { r
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result,
                                           const KeyComparator &comparator) -> bool {
-  auto i = 0;
-  auto j = GetSize() - 1;
-  while (i <= j) {
-    auto m = (j - i) / 2 + i;
-    if (comparator(array_[m].first, key) < 0) {
-      i = m + 1;
-    } else if (comparator(array_[m].first, key) > 0) {
-      j = m - 1;
-    } else {
-      result->resize(0);
-      result->push_back(array_[m].second);
-      return true;
-    }
+  int index{};
+  auto find = GetKeyIndex(key, &index, comparator);
+  if (find) {
+    result->resize(0);
+    result->push_back(array_[index].second);
+    return true;
   }
   return false;
 }
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator)
     -> bool {
-  auto i = 0;
-  auto j = GetSize() - 1;
-  while (i <= j) {
-    auto m = (j - i) / 2 + i;
-    if (comparator(array_[m].first, key) < 0) {
-      i = m + 1;
-    } else if (comparator(array_[m].first, key) > 0) {
-      j = m - 1;
-    } else {
-      return false;
-    }
+  int insert_index{};
+  auto find = GetKeyIndex(key, &insert_index, comparator);
+  if (find) {
+    return false;
   }
-  auto insert_idx = i;
-  std::move_backward(array_ + insert_idx, array_ + GetSize(), array_ + GetSize() + 1);
-  array_[insert_idx].first = key;
-  array_[insert_idx].second = value;
+  std::move_backward(array_ + insert_index, array_ + GetSize(), array_ + GetSize() + 1);
+  array_[insert_index].first = key;
+  array_[insert_index].second = value;
   IncreaseSize(1);
   return true;
 }
@@ -145,6 +111,36 @@ INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {
   std::copy(items, items + size, array_ + GetSize());
   IncreaseSize(size);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, KeyComparator comparator) {
+  int index{};
+  auto find = GetKeyIndex(key, &index, comparator);
+  if (find) {
+    std::move(array_ + index + 1, array_ + GetSize(), array_ + index);
+    IncreaseSize(-1);
+  }
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_LEAF_PAGE_TYPE::GetKeyIndex(const KeyType &key, int *key_index, const KeyComparator &comparator)
+    -> bool {
+  auto i = 0;
+  auto j = GetSize() - 1;
+  while (i <= j) {
+    auto m = (j - i) / 2 + i;
+    if (comparator(array_[m].first, key) < 0) {
+      i = m + 1;
+    } else if (comparator(array_[m].first, key) > 0) {
+      j = m - 1;
+    } else {
+      key_index[0] = m;
+      return true;
+    }
+  }
+  key_index[0] = i;
+  return false;
 }
 
 template class BPlusTreeLeafPage<GenericKey<4>, RID, GenericComparator<4>>;

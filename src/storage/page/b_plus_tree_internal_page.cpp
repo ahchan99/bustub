@@ -63,42 +63,26 @@ INDEX_TEMPLATE_ARGUMENTS auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::ValueAt(int index)
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetValue(const KeyType &key, const KeyComparator &comparator) const -> ValueType {
-  auto i = 1;
-  auto j = GetSize() - 1;
-  while (i <= j) {
-    auto m = (j - i) / 2 + i;
-    // 小于 key 走左侧，大于等于 key 走右侧
-    if (comparator(array_[m].first, key) < 0) {
-      i = m + 1;
-    } else if (comparator(array_[m].first, key) > 0) {
-      j = m - 1;
-    } else {
-      return array_[m].second;  // mid 为查找的值并入右侧
-    }
+  int index{};
+  auto find = GetKeyIndex(key, &index, comparator);
+  if (find) {
+    return ValueAt(index);
   }
-  return array_[i - 1].second;
+  return ValueAt(index - 1);
 }
 INDEX_TEMPLATE_ARGUMENTS
-auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(const ValueType &old_value, const KeyType &new_key,
-                                            const ValueType &new_value) -> bool {
-  auto i = 0;
-  auto j = GetSize() - 1;
-  while (i <= j) {
-    auto m = (j - i) / 2 + i;
-    if (array_[m].second < old_value) {
-      i = m + 1;
-    } else if (array_[m].second > old_value) {
-      j = m - 1;
-    } else {
-      auto insert_idx = m + 1;
-      std::move_backward(array_ + insert_idx, array_ + GetSize(), array_ + GetSize() + 1);
-      array_[insert_idx].first = new_key;
-      array_[insert_idx].second = new_value;
-      IncreaseSize(1);
-      return true;
-    }
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::Insert(const KeyType &key, const ValueType &value, const KeyComparator &comparator)
+    -> bool {
+  int insert_index{};
+  auto find = GetKeyIndex(key, &insert_index, comparator);
+  if (find) {
+    return false;
   }
-  return false;
+  std::move_backward(array_ + insert_index, array_ + GetSize(), array_ + GetSize() + 1);
+  array_[insert_index].first = key;
+  array_[insert_index].second = value;
+  IncreaseSize(1);
+  return true;
 }
 /*
  * Remove half of key & value pairs from this page to "recipient" page
@@ -123,6 +107,44 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::CopyNFrom(MappingType *items, int size, Buf
     buffer_pool_manager->UnpinPage(child_page->GetPageId(), true);
   }
   IncreaseSize(size);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetKeyIndex(const KeyType &key, int *key_index,
+                                                 const KeyComparator &comparator) const -> bool {
+  auto i = 1;
+  auto j = GetSize() - 1;
+  while (i <= j) {
+    auto m = (j - i) / 2 + i;
+    if (comparator(array_[m].first, key) < 0) {
+      i = m + 1;
+    } else if (comparator(array_[m].first, key) > 0) {
+      j = m - 1;
+    } else {
+      key_index[0] = m;
+      return true;
+    }
+  }
+  key_index[0] = i;
+  return false;
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+auto B_PLUS_TREE_INTERNAL_PAGE_TYPE::GetValueIndex(const ValueType &value, int *value_index) -> bool {
+  auto i = 0;
+  auto j = GetSize() - 1;
+  while (i <= j) {
+    auto m = (j - i) / 2 + i;
+    if (array_[m].second < value) {
+      i = m + 1;
+    } else if (array_[m].second > value) {
+      j = m - 1;
+    } else {
+      value_index[0] = m;
+      return true;
+    }
+  }
+  return false;
 }
 
 // valuetype for internalNode should be page id_t

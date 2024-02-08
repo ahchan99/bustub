@@ -23,6 +23,9 @@ namespace bustub {
 
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 
+// define page type enum
+enum class ModeType { SEARCH = 0, SEARCH_LEFTMOST, SEARCH_RIGHTMOST };
+
 /**
  * Main class providing the API for the Interactive B+ Tree.
  *
@@ -53,19 +56,6 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   // return the value associated with a given key
   auto GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction = nullptr) -> bool;
 
-  template <typename T>
-  auto NewPage() -> T *;
-
-  template <typename T>
-  auto Split(T *page) -> T *;
-
-  auto InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *new_page, const KeyType &new_key,
-                        Transaction *transaction) -> bool;
-
-  auto GetLeafPage(const KeyType &key) -> LeafPage *;
-  auto GetLeftmostLeafPage() -> LeafPage *;
-  auto GetRightmostLeafPage() -> LeafPage *;
-
   // return the page id of the root node
   auto GetRootPageId() -> page_id_t;
 
@@ -87,6 +77,21 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
  private:
+  template <typename T>
+  auto NewPage() -> T *;
+
+  template <typename T>
+  auto Split(T *page) -> T *;
+
+  auto GetLeafPage(const KeyType &key, ModeType mode = ModeType::SEARCH) -> LeafPage *;
+
+  auto InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *new_page, const KeyType &risen_key,
+                        Transaction *transaction) -> bool;
+
+  template <typename T>
+  auto CoalesceOrRedistribute(T *page) -> bool;
+
+ private:
   void UpdateRootPageId(int insert_record = 0);
 
   /* Debug Routines for FREE!! */
@@ -102,5 +107,4 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   int leaf_max_size_;
   int internal_max_size_;
 };
-
 }  // namespace bustub
