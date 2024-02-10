@@ -106,9 +106,7 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
     buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
     return;
   }
-  if (leaf->GetSize() < leaf->GetMinSize()) {
-    CoalesceOrRedistribute(leaf);
-  }
+  CoalesceOrRedistribute(leaf);
   buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true);
 }
 
@@ -328,39 +326,100 @@ auto BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *ne
 
 INDEX_TEMPLATE_ARGUMENTS
 template <typename T>
-auto BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page) -> bool {
+void BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page) {
+  static_assert(std::is_same_v<T, LeafPage> || std::is_same_v<T, InternalPage>);
+  if (page->GetSize() >= page->GetMinSize()) {
+    return;
+  }
   if (page->IsRootPage()) {
+    if (page->IsLeafPage()) {
+      assert(page->GetSize() == 0);
+      root_page_id_ = INVALID_PAGE_ID;
+      buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
+      buffer_pool_manager_->DeletePage(page->GetPageId());
+      UpdateRootPageId();
+      return;
+    }
+    if (page->GetSize() == 1) {
+      auto root = reinterpret_cast<InternalPage *>(page);
+      auto child_page = buffer_pool_manager_->FetchPage(root->ValueAt(0));
+      auto new_root = reinterpret_cast<BPlusTreePage *>(child_page->GetData());
+      new_root->SetParentPageId(INVALID_PAGE_ID);
+      root_page_id_ = new_root->GetPageId();
+      UpdateRootPageId();
+      buffer_pool_manager_->UnpinPage(new_root->GetPageId(), true);
+      buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
+      buffer_pool_manager_->DeletePage(page->GetPageId());
+      return;
+    }
   }
   auto *fetch_page = buffer_pool_manager_->FetchPage(page->GetParentPageId());
   auto *parent = reinterpret_cast<InternalPage *>(fetch_page->GetData());
   int index{};
   auto ret = parent->GetValueIndex(page->GetPageId(), &index);
-  if (!ret) {
-    return false;
-  }
+  assert(ret != false);
   // Previous or next child page of parent
-  auto sibling_index = index - 1;
-  if (index == 0) {
-    sibling_index = index + 1;
-  }
+  auto from_prev = index != 0;
+  auto sibling_index = index + (from_prev ? -1 : 1);
   fetch_page = buffer_pool_manager_->FetchPage(parent->ValueAt(sibling_index));
-  auto *sibling = reinterpret_cast<InternalPage *>(fetch_page->GetData());
-  assert(sibling != nullptr);
-  // Redistribution
+  assert(fetch_page != nullptr);
+  auto sibling = reinterpret_cast<T *>(fetch_page->GetData());
   if (sibling->GetSize() > sibling->GetMinSize()) {
-    //    if (index == 0) {
-    //      sibling->MoveFirstToEndOf(page, buffer_pool_manager_);
-    //    } else {
-    //      sibling->MoveLastToFrontOf(page, buffer_pool_manager_);
-    //    }
+    // Redistribution
+    if (page->IsLeafPage()) {
+      auto leaf = reinterpret_cast<LeafPage *>(page);
+      auto sibling_leaf = reinterpret_cast<LeafPage *>(sibling);
+      // Redistribution
+      if (!from_prev) {
+        sibling_leaf->MoveFirstToEndOf(leaf);
+        parent->SetKeyAt(1, sibling_leaf->KeyAt(0));
+      } else {
+        sibling_leaf->MoveLastToFrontOf(leaf);
+        parent->SetKeyAt(index, leaf->KeyAt(0));
+      }
+    } else {
+      auto internal = reinterpret_cast<InternalPage *>(page);
+      auto sibling_internal = reinterpret_cast<InternalPage *>(sibling);
+      // internal 需要补充缺省的 key 值
+      if (!from_prev) {
+        sibling_internal->MoveFirstToEndOf(internal, parent->KeyAt(1), buffer_pool_manager_);
+        parent->SetKeyAt(1, sibling_internal->KeyAt(0));
+      } else {
+        sibling_internal->MoveLastToFrontOf(internal, parent->KeyAt(index), buffer_pool_manager_);
+        parent->SetKeyAt(index, internal->KeyAt(0));
+      }
+    }
     buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
     buffer_pool_manager_->UnpinPage(sibling->GetPageId(), true);
-    buffer_pool_manager_->UnpinPage(parent->GetPageId(), false);
-    return ret;
+    buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
+    return;
   }
   // Coalesce
-
-  return false;
+  if (page->IsLeafPage()) {
+    auto leaf = reinterpret_cast<LeafPage *>(page);
+    auto sibling_leaf = reinterpret_cast<LeafPage *>(sibling);
+    if (!from_prev) {
+      sibling_leaf->MoveAllTo(leaf);
+      parent->Remove(1);
+    } else {
+      leaf->MoveAllTo(sibling_leaf);
+      parent->Remove(index);
+    }
+  } else {
+    auto internal = reinterpret_cast<InternalPage *>(page);
+    auto sibling_internal = reinterpret_cast<InternalPage *>(sibling);
+    if (!from_prev) {
+      sibling_internal->MoveAllTo(internal, parent->KeyAt(1), buffer_pool_manager_);
+      parent->Remove(1);
+    } else {
+      internal->MoveAllTo(sibling_internal, parent->KeyAt(index), buffer_pool_manager_);
+      parent->Remove(index);
+    }
+  }
+  buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
+  buffer_pool_manager_->UnpinPage(sibling->GetPageId(), true);
+  buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
+  CoalesceOrRedistribute(reinterpret_cast<T *>(parent));
 }
 
 /**

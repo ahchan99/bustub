@@ -89,9 +89,8 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
                         Transaction *transaction) -> bool;
 
   template <typename T>
-  auto CoalesceOrRedistribute(T *page) -> bool;
+  void CoalesceOrRedistribute(T *page);
 
- private:
   void UpdateRootPageId(int insert_record = 0);
 
   /* Debug Routines for FREE!! */

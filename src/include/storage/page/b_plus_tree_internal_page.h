@@ -49,6 +49,15 @@ class BPlusTreeInternalPage : public BPlusTreePage {
   void CopyNFrom(MappingType *items, int size, BufferPoolManager *buffer_pool_manager);
   auto GetKeyIndex(const KeyType &key, int *key_index, const KeyComparator &comparator) const -> bool;
   auto GetValueIndex(const ValueType &value, int *value_index) -> bool;
+  void MoveFirstToEndOf(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
+                        BufferPoolManager *buffer_pool_manager);
+  void MoveLastToFrontOf(BPlusTreeInternalPage *recipient, const KeyType &middle_key,
+                         BufferPoolManager *buffer_pool_manager);
+  void CopyFirstFrom(MappingType &item, BufferPoolManager *buffer_pool_manager);
+  void CopyLastFrom(MappingType &item, BufferPoolManager *buffer_pool_manager);
+  auto MappingAt(int index) -> const MappingType &;
+  void MoveAllTo(BPlusTreeInternalPage *recipient, const KeyType &middle_key, BufferPoolManager *buffer_pool_manager);
+  void Remove(int index);
 
  private:
   // Flexible array member for page data.

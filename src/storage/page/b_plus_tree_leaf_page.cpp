@@ -114,6 +114,37 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyNFrom(MappingType *items, int size) {
 }
 
 INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveFirstToEndOf(BPlusTreeLeafPage *recipient) {
+  assert(recipient != nullptr);
+  auto first_item = MappingAt(0);
+  std::move(array_ + 1, array_ + GetSize(), array_);
+  recipient->CopyLastFrom(first_item);
+  IncreaseSize(-1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyLastFrom(MappingType &item) {
+  array_[GetSize()] = item;
+  IncreaseSize(1);
+}
+// namespace bustub
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveLastToFrontOf(BPlusTreeLeafPage *recipient) {
+  assert(recipient != nullptr);
+  auto last_item = MappingAt(GetSize() - 1);
+  recipient->CopyFirstFrom(last_item);
+  IncreaseSize(-1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::CopyFirstFrom(MappingType &item) {
+  std::move_backward(array_, array_ + GetSize(), array_ + GetSize() + 1);
+  array_[0] = item;
+  IncreaseSize(1);
+}
+
+INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, KeyComparator comparator) {
   int index{};
   auto find = GetKeyIndex(key, &index, comparator);
@@ -121,6 +152,14 @@ void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, KeyComparator compar
     std::move(array_ + index + 1, array_ + GetSize(), array_ + index);
     IncreaseSize(-1);
   }
+}
+
+INDEX_TEMPLATE_ARGUMENTS
+void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveAllTo(BPlusTreeLeafPage *recipient) {
+  assert(recipient != nullptr);
+  recipient->CopyNFrom(array_, GetSize());
+  recipient->SetNextPageId(GetNextPageId());
+  SetSize(0);
 }
 
 INDEX_TEMPLATE_ARGUMENTS

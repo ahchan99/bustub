@@ -57,6 +57,11 @@ class BPlusTreeLeafPage : public BPlusTreePage {
   void MoveHalfTo(BPlusTreeLeafPage *recipient);
   void CopyNFrom(MappingType *items, int size);
   void Remove(const KeyType &key, KeyComparator comparator);
+  void MoveFirstToEndOf(BPlusTreeLeafPage *recipient);
+  void MoveLastToFrontOf(BPlusTreeLeafPage *recipient);
+  void CopyFirstFrom(MappingType &item);
+  void CopyLastFrom(MappingType &item);
+  void MoveAllTo(BPlusTreeLeafPage *recipient);
 
  private:
   page_id_t next_page_id_;
