@@ -163,4 +163,90 @@ TEST(BPlusTreeTests, DeleteTest2) {
   remove("test.db");
   remove("test.log");
 }
+
+TEST(BPlusTreeTests, ScaleTest) {
+  // create KeyComparator and index schema
+  auto key_schema = ParseCreateStatement("a bigint");
+  GenericComparator<64> comparator(key_schema.get());
+
+  auto disk_manager = new DiskManager("test.db");
+  BufferPoolManager *bpm = new BufferPoolManagerInstance(10, disk_manager);
+  // create b+ tree
+  BPlusTree<GenericKey<64>, RID, GenericComparator<64>> tree("foo_pk", bpm, comparator);
+  GenericKey<64> index_key;
+  RID rid;
+  // create transaction
+  auto transaction = new Transaction(0);
+
+  // create and fetch header_page
+  page_id_t page_id;
+  auto header_page = bpm->NewPage(&page_id);
+  (void)header_page;
+
+  auto scale = 300;
+  std::vector<int64_t> keys;
+  keys.reserve(scale);
+  for (int i = 0; i < scale; ++i) {
+    keys.push_back(i + 1);
+  }
+
+  for (auto key : keys) {
+    int64_t value = key & 0xFFFFFFFF;
+    rid.Set(static_cast<int32_t>(key >> 32), value);
+    index_key.SetFromInteger(key);
+    std::cout << "Insert :" << key << std::endl;
+    tree.Insert(index_key, rid, transaction);
+    // std::cout<<tree.ToString()<<endl;
+  }
+
+  // check all value is in the tree
+  std::vector<RID> rids;
+  for (auto key : keys) {
+    rids.clear();
+    index_key.SetFromInteger(key);
+    tree.GetValue(index_key, &rids);
+    EXPECT_EQ(rids.size(), 1);
+
+    int64_t value = key & 0xFFFFFFFF;
+    EXPECT_EQ(rids[0].GetSlotNum(), value);
+  }
+
+  // range query
+  int64_t start_key = 1;
+  int64_t current_key = start_key;
+  index_key.SetFromInteger(start_key);
+  for (auto iterator = tree.Begin(index_key); !iterator.IsEnd(); ++iterator) {
+    auto location = (*iterator).second;
+    EXPECT_EQ(location.GetPageId(), 0);
+    EXPECT_EQ(location.GetSlotNum(), current_key);
+    current_key = current_key + 1;
+  }
+
+  EXPECT_EQ(current_key, keys.size() + 1);
+
+  // delete all
+  for (auto key : keys) {
+    index_key.SetFromInteger(key);
+    std::cout << "Remove :" << index_key << std::endl;
+    tree.Remove(index_key, transaction);
+    // std::cout<<tree.ToString()<<endl;
+  }
+
+  EXPECT_EQ(tree.IsEmpty(), true);
+
+  // check all value is in the tree
+  for (auto key : keys) {
+    rids.clear();
+    index_key.SetFromInteger(key);
+    tree.GetValue(index_key, &rids);
+    EXPECT_EQ(rids.size(), 0);
+  }
+
+  bpm->UnpinPage(HEADER_PAGE_ID, true);
+  delete transaction;
+  delete disk_manager;
+  delete bpm;
+  remove("test.db");
+  remove("test.log");
+}
 }  // namespace bustub

@@ -99,7 +99,8 @@ auto B_PLUS_TREE_LEAF_PAGE_TYPE::Insert(const KeyType &key, const ValueType &val
 INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::MoveHalfTo(BPlusTreeLeafPage *recipient) {
   assert(recipient != nullptr);
-  auto remain_size = GetMinSize();  // equal to split index
+  // 防止分裂前为根节点导致 min size 错误
+  auto remain_size = GetMaxSize() / 2;
   recipient->CopyNFrom(array_ + remain_size, GetSize() - remain_size);
   SetSize(remain_size);
 }
@@ -148,10 +149,11 @@ INDEX_TEMPLATE_ARGUMENTS
 void B_PLUS_TREE_LEAF_PAGE_TYPE::Remove(const KeyType &key, KeyComparator comparator) {
   int index{};
   auto find = GetKeyIndex(key, &index, comparator);
-  if (find) {
-    std::move(array_ + index + 1, array_ + GetSize(), array_ + index);
-    IncreaseSize(-1);
+  if (!find) {
+    return;
   }
+  std::move(array_ + index + 1, array_ + GetSize(), array_ + index);
+  IncreaseSize(-1);
 }
 
 INDEX_TEMPLATE_ARGUMENTS

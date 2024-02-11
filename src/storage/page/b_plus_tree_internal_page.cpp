@@ -102,7 +102,8 @@ void B_PLUS_TREE_INTERNAL_PAGE_TYPE::MoveHalfTo(BPlusTreeInternalPage *recipient
                                                 BufferPoolManager *buffer_pool_manager) {
   assert(recipient != nullptr);
   assert(buffer_pool_manager != nullptr);
-  auto remain_size = GetMinSize();  // equal to split index
+  // 防止分裂前为根节点导致 min size 错误
+  auto remain_size = (GetMaxSize() + 1) / 2;
   recipient->CopyNFrom(array_ + remain_size, GetSize() - remain_size, buffer_pool_manager);
   SetSize(remain_size);
 }

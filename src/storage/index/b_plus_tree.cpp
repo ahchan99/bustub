@@ -69,7 +69,7 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   auto ret = leaf->Insert(key, value, comparator_);
   // Duplicate key
   if (!ret) {
-    buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true);
+    buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
     return false;
   }
   if (leaf->GetSize() < leaf->GetMaxSize()) {
@@ -81,6 +81,8 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
   auto new_leaf = Split(leaf);
   auto risen_key = new_leaf->KeyAt(0);
   ret = InsertIntoParent(leaf, new_leaf, risen_key, transaction);
+  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true);
+  buffer_pool_manager_->UnpinPage(new_leaf->GetPageId(), true);
   return ret;
 }
 
@@ -102,12 +104,16 @@ void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
   auto leaf = GetLeafPage(key);
   auto size = leaf->GetSize();
   leaf->Remove(key, comparator_);
+  //  for (auto i = 0; i < leaf->GetSize(); i++) {
+  //    std::cout << leaf->KeyAt(i) << " | ";
+  //  }
+  //  std::cout << std::endl;
   if (size == leaf->GetSize()) {
+    LOG_DEBUG("Remove ERROR");
     buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
     return;
   }
   CoalesceOrRedistribute(leaf);
-  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true);
 }
 
 /*****************************************************************************
@@ -233,12 +239,12 @@ auto BPLUSTREE_TYPE::NewPage() -> T * {
   if (std::is_same_v<T, LeafPage>) {
     auto new_page = reinterpret_cast<LeafPage *>(page->GetData());
     new_page->Init(page_id, INVALID_PAGE_ID, leaf_max_size_);
-    buffer_pool_manager_->UnpinPage(page_id, true);
+    //  buffer_pool_manager_->UnpinPage(page_id, true);
     return reinterpret_cast<T *>(new_page);
   }
   auto new_page = reinterpret_cast<InternalPage *>(page->GetData());
   new_page->Init(page_id, INVALID_PAGE_ID, internal_max_size_);
-  buffer_pool_manager_->UnpinPage(page_id, true);
+  //  buffer_pool_manager_->UnpinPage(page_id, true);
   return reinterpret_cast<T *>(new_page);
 }
 
@@ -285,9 +291,7 @@ auto BPLUSTREE_TYPE::GetLeafPage(const KeyType &key, ModeType mode) -> BPlusTree
     page_id = child_id;
   }
   // now internal_page is a leaf node
-  auto leaf = reinterpret_cast<LeafPage *>(internal);
-  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
-  return leaf;
+  return reinterpret_cast<LeafPage *>(internal);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -307,10 +311,10 @@ auto BPLUSTREE_TYPE::InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *ne
     return true;
   }
   auto page = buffer_pool_manager_->FetchPage(old_page->GetParentPageId());
-  auto *parent = reinterpret_cast<InternalPage *>(page->GetData());
+  auto parent = reinterpret_cast<InternalPage *>(page->GetData());
   auto ret = parent->Insert(risen_key, new_page->GetPageId(), comparator_);
-  buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
   if (parent->GetSize() <= internal_max_size_) {
+    buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
     return ret;
   }
   // Splitting condition: number of children BEFORE insertion equals to max_size for internal nodes
@@ -329,6 +333,7 @@ template <typename T>
 void BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page) {
   static_assert(std::is_same_v<T, LeafPage> || std::is_same_v<T, InternalPage>);
   if (page->GetSize() >= page->GetMinSize()) {
+    buffer_pool_manager_->UnpinPage(page->GetPageId(), false);
     return;
   }
   if (page->IsRootPage()) {
@@ -353,8 +358,8 @@ void BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page) {
       return;
     }
   }
-  auto *fetch_page = buffer_pool_manager_->FetchPage(page->GetParentPageId());
-  auto *parent = reinterpret_cast<InternalPage *>(fetch_page->GetData());
+  auto fetch_page = buffer_pool_manager_->FetchPage(page->GetParentPageId());
+  auto parent = reinterpret_cast<InternalPage *>(fetch_page->GetData());
   int index{};
   auto ret = parent->GetValueIndex(page->GetPageId(), &index);
   assert(ret != false);
@@ -418,6 +423,11 @@ void BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page) {
   }
   buffer_pool_manager_->UnpinPage(page->GetPageId(), true);
   buffer_pool_manager_->UnpinPage(sibling->GetPageId(), true);
+  if (!from_prev) {
+    buffer_pool_manager_->DeletePage(sibling->GetPageId());
+  } else {
+    buffer_pool_manager_->DeletePage(page->GetPageId());
+  }
   buffer_pool_manager_->UnpinPage(parent->GetPageId(), true);
   CoalesceOrRedistribute(reinterpret_cast<T *>(parent));
 }
