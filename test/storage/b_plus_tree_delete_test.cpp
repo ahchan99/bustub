@@ -164,7 +164,7 @@ TEST(BPlusTreeTests, DeleteTest2) {
   remove("test.log");
 }
 
-TEST(BPlusTreeTests, ScaleTest) {
+TEST(BPlusTreeTests, DeleteScaleTest) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
   GenericComparator<64> comparator(key_schema.get());
@@ -194,8 +194,8 @@ TEST(BPlusTreeTests, ScaleTest) {
     int64_t value = key & 0xFFFFFFFF;
     rid.Set(static_cast<int32_t>(key >> 32), value);
     index_key.SetFromInteger(key);
-    std::cout << "Insert :" << key << std::endl;
     tree.Insert(index_key, rid, transaction);
+    // tree.Check();
     // std::cout<<tree.ToString()<<endl;
   }
 
@@ -220,6 +220,7 @@ TEST(BPlusTreeTests, ScaleTest) {
     EXPECT_EQ(location.GetPageId(), 0);
     EXPECT_EQ(location.GetSlotNum(), current_key);
     current_key = current_key + 1;
+    // tree.Check();
   }
 
   EXPECT_EQ(current_key, keys.size() + 1);
@@ -227,8 +228,8 @@ TEST(BPlusTreeTests, ScaleTest) {
   // delete all
   for (auto key : keys) {
     index_key.SetFromInteger(key);
-    std::cout << "Remove :" << index_key << std::endl;
     tree.Remove(index_key, transaction);
+    //    tree.Check();
     // std::cout<<tree.ToString()<<endl;
   }
 
@@ -240,9 +241,11 @@ TEST(BPlusTreeTests, ScaleTest) {
     index_key.SetFromInteger(key);
     tree.GetValue(index_key, &rids);
     EXPECT_EQ(rids.size(), 0);
+    // tree.Check();
   }
 
   bpm->UnpinPage(HEADER_PAGE_ID, true);
+  // tree.Check();
   delete transaction;
   delete disk_manager;
   delete bpm;

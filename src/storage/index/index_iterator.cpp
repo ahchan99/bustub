@@ -15,48 +15,39 @@ INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::IndexIterator() = default;
 
 INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, Page *page, int index)
-    : buffer_pool_manager_(bpm), page_(page), index_(index) {
-  if (page != nullptr) {
-    leaf_page_ = reinterpret_cast<LeafPage *>(page->GetData());
-  } else {
-    leaf_page_ = nullptr;
-  }
-}
-
-INDEX_TEMPLATE_ARGUMENTS
-INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, LeafPage *leaf_page, int index)
-    : buffer_pool_manager_(bpm), leaf_page_(leaf_page), index_(index) {
-  if (leaf_page != nullptr) {
-    page_ = buffer_pool_manager_->FetchPage(leaf_page_->GetPageId());
-    buffer_pool_manager_->UnpinPage(leaf_page_->GetPageId(), false);
-  } else {
-    page_ = nullptr;
-  }
+INDEXITERATOR_TYPE::IndexIterator(BufferPoolManager *bpm, LeafPage *leaf, int index)
+    : buffer_pool_manager_(bpm), leaf_(leaf), index_(index) {
+  page_ = buffer_pool_manager_->FetchPage(leaf->GetPageId());
+  // buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 INDEXITERATOR_TYPE::~IndexIterator() {
-  if (leaf_page_ != nullptr) {
-    buffer_pool_manager_->UnpinPage(leaf_page_->GetPageId(), false);
+  if (leaf_ != nullptr) {
+    auto page = buffer_pool_manager_->FetchPage(leaf_->GetPageId());
+    page->RUnlatch();
+    buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false);  // release the pin count when locked
+    buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false);
   }
 }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::IsEnd() -> bool {
-  return leaf_page_->GetNextPageId() == INVALID_PAGE_ID && index_ == leaf_page_->GetSize();
+  return leaf_->GetNextPageId() == INVALID_PAGE_ID && index_ == leaf_->GetSize();
 }
 
 INDEX_TEMPLATE_ARGUMENTS
-auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { return leaf_page_->MappingAt(index_); }
+auto INDEXITERATOR_TYPE::operator*() -> const MappingType & { return leaf_->MappingAt(index_); }
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
-  if (index_ == leaf_page_->GetSize() - 1 && leaf_page_->GetNextPageId() != INVALID_PAGE_ID) {
-    auto next_page = buffer_pool_manager_->FetchPage(leaf_page_->GetNextPageId());
-    buffer_pool_manager_->UnpinPage(leaf_page_->GetPageId(), false);
+  if (index_ == leaf_->GetSize() - 1 && leaf_->GetNextPageId() != INVALID_PAGE_ID) {
+    page_->RUnlatch();
+    buffer_pool_manager_->UnpinPage(leaf_->GetPageId(), false);
+    auto next_page = buffer_pool_manager_->FetchPage(leaf_->GetNextPageId());
     page_ = next_page;
-    leaf_page_ = reinterpret_cast<LeafPage *>(next_page->GetData());
+    page_->RLatch();
+    leaf_ = reinterpret_cast<LeafPage *>(next_page->GetData());
     index_ = 0;
   } else {
     index_++;
@@ -66,7 +57,7 @@ auto INDEXITERATOR_TYPE::operator++() -> INDEXITERATOR_TYPE & {
 
 INDEX_TEMPLATE_ARGUMENTS
 auto INDEXITERATOR_TYPE::operator==(const IndexIterator &itr) const -> bool {
-  return leaf_page_ == nullptr || (leaf_page_->GetPageId() == itr.leaf_page_->GetPageId() && index_ == itr.index_);
+  return leaf_ == nullptr || (leaf_->GetPageId() == itr.leaf_->GetPageId() && index_ == itr.index_);
 }
 
 INDEX_TEMPLATE_ARGUMENTS

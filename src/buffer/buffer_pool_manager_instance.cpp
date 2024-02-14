@@ -13,6 +13,7 @@
 #include "buffer/buffer_pool_manager_instance.h"
 
 #include "common/exception.h"
+#include "common/logger.h"
 #include "common/macros.h"
 
 namespace bustub {
@@ -106,9 +107,11 @@ auto BufferPoolManagerInstance::UnpinPgImp(page_id_t page_id, bool is_dirty) -> 
   std::scoped_lock<std::mutex> lock(latch_);
   frame_id_t frame_id{};
   if (!page_table_->Find(page_id, frame_id)) {
+    LOG_DEBUG("Page error while finding");
     return false;
   }
   if (pages_[frame_id].pin_count_ <= 0) {
+    LOG_DEBUG("Page error while unpinning");
     return false;
   }
   pages_[frame_id].pin_count_--;
@@ -142,6 +145,18 @@ void BufferPoolManagerInstance::FlushAllPgsImp() {
   }
 }
 
+// auto BufferPoolManagerInstance::CheckAllPgsImp() -> bool {
+//   bool res = true;
+//   for (size_t i = 1; i < pool_size_; i++) {
+//     if (pages_[i].pin_count_ != 0 && pages_[i].GetPageId() != 0) { // 过滤 header page
+//       res = false;
+//       std::string const log =
+//           "Page: " + std::to_string(pages_[i].GetPageId()) + " pin count: " + std::to_string(pages_[i].pin_count_);
+//       LOG_DEBUG("%s", log.data());
+//     }
+//   }
+//   return res;
+// }
 auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
   std::scoped_lock<std::mutex> lock(latch_);
   frame_id_t frame_id{};
@@ -149,6 +164,7 @@ auto BufferPoolManagerInstance::DeletePgImp(page_id_t page_id) -> bool {
     return true;
   }
   if (pages_[frame_id].pin_count_ > 0) {
+    LOG_DEBUG("Page pin count > 0 while deleting");
     return false;
   }
   replacer_->Remove(frame_id);

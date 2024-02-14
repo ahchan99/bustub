@@ -24,7 +24,7 @@ namespace bustub {
 #define BPLUSTREE_TYPE BPlusTree<KeyType, ValueType, KeyComparator>
 
 // define page type enum
-enum class ModeType { SEARCH = 0, SEARCH_LEFTMOST, SEARCH_RIGHTMOST };
+enum class ModeType { SEARCH = 0, SEARCH_LEFTMOST, SEARCH_RIGHTMOST, INSERT, DELETE };
 
 /**
  * Main class providing the API for the Interactive B+ Tree.
@@ -76,22 +76,39 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   // read data from file and remove one by one
   void RemoveFromFile(const std::string &file_name, Transaction *transaction = nullptr);
 
+  auto Check() -> bool;
+
  private:
   template <typename T>
   auto NewPage() -> T *;
-
   template <typename T>
   auto Split(T *page) -> T *;
-
-  auto GetLeafPage(const KeyType &key, ModeType mode = ModeType::SEARCH) -> LeafPage *;
-
+  auto GetLeafPage(ModeType mode, const KeyType &key = KeyType(), Transaction *transaction = nullptr) -> LeafPage *;
   auto InsertIntoParent(BPlusTreePage *old_page, BPlusTreePage *new_page, const KeyType &risen_key,
                         Transaction *transaction) -> bool;
-
   template <typename T>
-  void CoalesceOrRedistribute(T *page);
-
+  auto CoalesceOrRedistribute(T *page, Transaction *transaction) -> bool;
   void UpdateRootPageId(int insert_record = 0);
+  template <typename T>
+  auto IsSafe(T *page, ModeType mode) -> bool;
+  auto IsDirty(ModeType mode) -> bool;
+
+  void Latch(page_id_t page_id, bool is_dirty);
+  void Latch(Page *page_id, bool is_dirty);
+  void Latch(bool is_dirty, Transaction *transaction = nullptr);
+  void Latch(page_id_t page_id, ModeType mode);
+  void Latch(Page *page_id, ModeType mode);
+  void Latch(ModeType mode, Transaction *transaction = nullptr);
+  void ReleaseLatch(page_id_t page_id, bool is_dirty, bool is_success = true);
+  void ReleaseLatch(Page *page_id, bool is_dirty, bool is_success = true);
+  void ReleaseLatch(page_id_t page_id, ModeType mode, bool is_success = true);
+  void ReleaseLatch(Page *page_id, ModeType mode, bool is_success = true);
+  void ReleaseLatch(Transaction *transaction, bool is_dirty = false);
+  void ReleaseLatch(bool is_dirty);
+  void ReleaseLatch(ModeType mode);
+
+  //  auto IsBalanced(page_id_t pid) -> int;
+  //  auto IsPageCorr(page_id_t pid, std::pair<KeyType, KeyType> &out) -> bool;
 
   /* Debug Routines for FREE!! */
   void ToGraph(BPlusTreePage *page, BufferPoolManager *bpm, std::ofstream &out) const;
@@ -105,5 +122,6 @@ INDEX_TEMPLATE_ARGUMENTS class BPlusTree {
   KeyComparator comparator_;
   int leaf_max_size_;
   int internal_max_size_;
+  ReaderWriterLatch root_page_id_latch_;
 };
 }  // namespace bustub

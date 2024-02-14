@@ -125,6 +125,7 @@ class BufferPoolManagerInstance : public BufferPoolManager {
    */
   void FlushAllPgsImp() override;
 
+  //  auto CheckAllPgsImp() -> bool;
   /**
    * TODO(P1): Add implementation
    *

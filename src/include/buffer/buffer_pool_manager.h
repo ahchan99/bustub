@@ -84,6 +84,13 @@ class BufferPoolManager {
     GradingCallback(callback, CallbackType::AFTER, INVALID_PAGE_ID);
   }
 
+  //  auto CheckAllPages(bufferpool_callback_fn callback = nullptr) -> bool {
+  //    GradingCallback(callback, CallbackType::BEFORE, INVALID_PAGE_ID);
+  //    auto result = CheckAllPgsImp();
+  //    GradingCallback(callback, CallbackType::AFTER, INVALID_PAGE_ID);
+  //    return result;
+  //  }
+
   /** @return size of the buffer pool */
   virtual auto GetPoolSize() -> size_t = 0;
 
@@ -141,5 +148,7 @@ class BufferPoolManager {
    * Flushes all the pages in the buffer pool to disk.
    */
   virtual void FlushAllPgsImp() = 0;
+
+  //  virtual auto CheckAllPgsImp() -> bool = 0;
 };
 }  // namespace bustub
