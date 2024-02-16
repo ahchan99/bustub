@@ -13,7 +13,7 @@
 
 namespace bustub {
 IndexScanExecutor::IndexScanExecutor(ExecutorContext *exec_ctx, const IndexScanPlanNode *plan)
-    : AbstractExecutor(exec_ctx),1
+    : AbstractExecutor(exec_ctx),
       plan_{plan},
       index_info_{exec_ctx_->GetCatalog()->GetIndex(plan_->index_oid_)},
       table_info_{exec_ctx_->GetCatalog()->GetTable(index_info_->table_name_)},
