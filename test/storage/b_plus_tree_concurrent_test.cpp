@@ -523,7 +523,6 @@ TEST(BPlusTreeConcurrentTest, DeleteTest3) {
   // create b+ tree
   BPlusTree<GenericKey<16>, RID, GenericComparator<16>> tree("foo_pk", bpm, comparator);
   GenericKey<16> index_key;
-  RID rid;
   // create and fetch header_page
   page_id_t page_id;
   auto header_page = bpm->NewPage(&page_id);
@@ -571,7 +570,6 @@ TEST(BPlusTreeConcurrentTest, DeleteTest4) {
   // create b+ tree
   BPlusTree<GenericKey<16>, RID, GenericComparator<16>> tree("foo_pk", bpm, comparator);
   GenericKey<16> index_key;
-  RID rid;
   // create and fetch header_page
   page_id_t page_id;
   auto header_page = bpm->NewPage(&page_id);
@@ -655,11 +653,7 @@ TEST(BPlusTreeConcurrentTest, MixTest) {
   remove("test.log");
 }
 
-// TODO: b_plus_tree_concurrent_test: /mnt/c/Code/bustub/src/storage/index/b_plus_tree.cpp:419:
-// bool bustub::BPlusTree<KeyType, ValueType, KeyComparator>::CoalesceOrRedistribute(T*, bustub::Transaction*)
-// [with T = bustub::BPlusTreeLeafPage<bustub::GenericKey<16>, bustub::RID, bustub::GenericComparator<16> >; KeyType =
-// bustub::GenericKey<16>; ValueType = bustub::RID; KeyComparator = bustub::GenericComparator<16>]: Assertion `ret !=
-// false' failed.
+// FIXME: b_plus_tree.cpp: Assertion `ret !=false' failed.
 TEST(BPlusTreeConcurrentTest, MixTest2) {
   // create KeyComparator and index schema
   auto key_schema = ParseCreateStatement("a bigint");
@@ -670,7 +664,6 @@ TEST(BPlusTreeConcurrentTest, MixTest2) {
   // create b+ tree
   BPlusTree<GenericKey<16>, RID, GenericComparator<16>> tree("foo_pk", bpm, comparator);
   GenericKey<16> index_key;
-  RID rid;
 
   // create and fetch header_page
   page_id_t page_id;
@@ -734,7 +727,6 @@ TEST(BPlusTreeConcurrentTest, MixTest3) {
   // create b+ tree
   BPlusTree<GenericKey<16>, RID, GenericComparator<16>> tree("foo_pk", bpm, comparator);
   GenericKey<16> index_key;
-  RID rid;
 
   // create and fetch header_page
   page_id_t page_id;
