@@ -64,7 +64,8 @@ class LockManager {
   class LockRequestQueue {
    public:
     /** List of lock requests for the same resource (table or row) */
-    std::list<LockRequest *> request_queue_;
+    //    std::list<LockRequest *> request_queue_;
+    std::list<std::shared_ptr<LockRequest>> request_queue_;
     /** For notifying blocked transactions on this rid */
     std::condition_variable cv_;
     /** txn_id of an upgrading transaction (if any) */
@@ -296,6 +297,19 @@ class LockManager {
    * Runs cycle detection in the background.
    */
   auto RunCycleDetection() -> void;
+
+  void InsertOrDeleteTableLockSet(Transaction *txn, const std::shared_ptr<LockRequest> &lock_request, bool insert);
+
+  auto GrantLock(const std::shared_ptr<LockRequest> &lock_request,
+                 const std::shared_ptr<LockRequestQueue> &lock_request_queue) -> bool;
+
+  void InsertOrDeleteRowLockSet(Transaction *txn, const std::shared_ptr<LockRequest> &lock_request, bool insert);
+
+  void InsertRowLockSet(const std::shared_ptr<std::unordered_map<table_oid_t, std::unordered_set<RID>>> &lock_set,
+                        const table_oid_t &oid, const RID &rid);
+
+  void DeleteRowLockSet(const std::shared_ptr<std::unordered_map<table_oid_t, std::unordered_set<RID>>> &lock_set,
+                        const table_oid_t &oid, const RID &rid);
 
  private:
   /** Fall 2022 */

@@ -32,10 +32,11 @@ auto BPLUSTREE_TYPE::IsEmpty() const -> bool { return root_page_id_ == INVALID_P
  */
 INDEX_TEMPLATE_ARGUMENTS
 auto BPLUSTREE_TYPE::GetValue(const KeyType &key, std::vector<ValueType> *result, Transaction *transaction) -> bool {
+  Latch(ModeType::SEARCH);
   if (IsEmpty()) {
+    ReleaseLatch(ModeType::SEARCH);
     return false;
   }
-  Latch(ModeType::SEARCH);
   auto leaf = GetLeafPage(ModeType::SEARCH, key, transaction);
   auto ret = leaf->GetValue(key, result, comparator_);
   ReleaseLatch(leaf->GetPageId(), ModeType::SEARCH);
@@ -104,10 +105,11 @@ auto BPLUSTREE_TYPE::Insert(const KeyType &key, const ValueType &value, Transact
  */
 INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::Remove(const KeyType &key, Transaction *transaction) {
+  Latch(ModeType::DELETE, transaction);
   if (IsEmpty()) {
+    ReleaseLatch(transaction);
     return;
   }
-  Latch(ModeType::DELETE, transaction);
   auto leaf = GetLeafPage(ModeType::DELETE, key, transaction);
   auto size = leaf->GetSize();
   leaf->Remove(key, comparator_);
@@ -194,7 +196,11 @@ auto BPLUSTREE_TYPE::End() -> INDEXITERATOR_TYPE {
  * @return Page id of the root of this tree
  */
 INDEX_TEMPLATE_ARGUMENTS
-auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t { return root_page_id_; }
+auto BPLUSTREE_TYPE::GetRootPageId() -> page_id_t {
+  Latch(ModeType::SEARCH);
+  ReleaseLatch(ModeType::SEARCH);
+  return root_page_id_;
+}
 
 /*****************************************************************************
  * UTILITIES AND DEBUG
@@ -416,12 +422,19 @@ auto BPLUSTREE_TYPE::CoalesceOrRedistribute(T *page, Transaction *transaction) -
   auto parent = reinterpret_cast<InternalPage *>(fetch_page->GetData());
   int index{};
   auto ret = parent->GetValueIndex(page->GetPageId(), &index);
-  assert(ret != false);
+  if (!ret) {
+    LOG_DEBUG("Find child logic is ERROR");
+    std::cout << "Parent:" << parent->IsRootPage() << std::endl;
+    std::cout << "Find:" << page->GetPageId() << std::endl;
+    for (auto i = 0; i < parent->GetSize(); i++) {
+      std::cout << parent->ValueAt(i) << " | ";
+    }
+  }
+  std::cout << std::endl;
   // Previous or next child page of parent
   auto from_prev = index != 0;
   auto sibling_index = index + (from_prev ? -1 : 1);
   fetch_page = buffer_pool_manager_->FetchPage(parent->ValueAt(sibling_index));
-  assert(fetch_page != nullptr);
   Latch(fetch_page, ModeType::DELETE);
   auto sibling = reinterpret_cast<T *>(fetch_page->GetData());
   if (sibling->GetSize() > sibling->GetMinSize()) {
@@ -537,7 +550,7 @@ INDEX_TEMPLATE_ARGUMENTS
 void BPLUSTREE_TYPE::ReleaseLatch(page_id_t page_id, bool is_dirty, bool is_success) {
   auto page = buffer_pool_manager_->FetchPage(page_id);
   ReleaseLatch(page, is_dirty, is_success);
-  buffer_pool_manager_->UnpinPage(page_id, is_dirty);
+  buffer_pool_manager_->UnpinPage(page_id, false);
 }
 
 INDEX_TEMPLATE_ARGUMENTS
@@ -626,7 +639,10 @@ auto BPLUSTREE_TYPE::IsSafe(T *page, ModeType mode) -> bool {
   // 如果再删除一个元素，不会产生并合
   if (mode == ModeType::DELETE) {
     if (page->IsRootPage()) {
-      return page->GetSize() > 2;
+      if (page->IsLeafPage()) {
+        return page->GetSize() >= leaf_max_size_ / 2 + 1;
+      }
+      return page->GetSize() >= (internal_max_size_ + 1) / 2 + 1;
     }
     return page->GetSize() >= page->GetMinSize() + 1;
   }
